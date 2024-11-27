@@ -1,7 +1,7 @@
 extern crate http_request_parser;
 
 use std::net::{ TcpListener, TcpStream };
-use std::io::Error;
+use std::io::{Error, Read};
 use http_request_parser::{ Request, Response };
 
 fn main() -> Result<(), Error> {
@@ -12,7 +12,9 @@ fn main() -> Result<(), Error> {
       Err(why) => println!("Error: {why}"),
       Ok(mut stream) => {
         println!("Accepted new connection...");
-        println!("{stream:?}");
+        let mut req_text = String::new();
+        stream.read_to_string(&mut req_text).unwrap();
+        println!("{:?}", req_text);
         handle_connection(&mut stream)?;
       }
     }
