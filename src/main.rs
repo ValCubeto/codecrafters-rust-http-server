@@ -12,9 +12,6 @@ fn main() -> Result<(), Error> {
       Err(why) => println!("Error: {why}"),
       Ok(mut stream) => {
         println!("Accepted new connection...");
-        let mut req_text = String::new();
-        stream.read_to_string(&mut req_text).unwrap();
-        println!("{:?}", req_text);
         handle_connection(&mut stream)?;
       }
     }
