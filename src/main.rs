@@ -1,12 +1,10 @@
-use std::net::TcpListener;
-use std::io;
-use std::io::Write;
+extern crate http_request_parser;
 
-const RES_200: &[u8] = b"HTTP/1.1 200 OK\r\n\r\n";
+use std::net::{ TcpListener, TcpStream };
+use std::io::Error;
+use http_request_parser::{ Request, Response };
 
-fn main() -> io::Result<()> {
-  println!("Logs from your program will appear here!");
-
+fn main() -> Result<(), Error> {
   let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
 
   for stream in listener.incoming() {
@@ -14,11 +12,27 @@ fn main() -> io::Result<()> {
       Err(why) => println!("Error: {why}"),
       Ok(mut stream) => {
         println!("Accepted new connection");
-        stream.write_all(RES_200)?;
-        stream.flush()?;
+        handle_connection(&mut stream)?;
       }
     }
   }
 
+  Ok(())
+}
+
+fn handle_connection(stream: &mut TcpStream) -> Result<(), Error> {
+  let req = Request::from(stream);
+  let mut res = Response::new();
+
+  println!("Received request: {:?}", req.path);
+
+  if req.path == "/" {
+    res.status = 200;
+    res.status_message = "OK".to_owned();
+  } else {
+    res.status = 404;
+    res.status_message = "Not Found".to_owned();
+  }
+  res.send(stream);
   Ok(())
 }
