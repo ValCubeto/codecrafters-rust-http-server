@@ -12,6 +12,7 @@ fn main() -> Result<(), Error> {
       Err(why) => println!("Error: {why}"),
       Ok(mut stream) => {
         println!("Accepted new connection...");
+        println!("{stream:?}");
         handle_connection(&mut stream)?;
       }
     }
@@ -32,7 +33,7 @@ fn handle_connection(stream: &mut TcpStream) -> Result<(), Error> {
   } else {
     res.status = 404;
     res.status_message = "Not Found".to_owned();
-    println!("{res:?}")
+    println!("{res:?}");
   }
   res.send(stream);
   Ok(())
