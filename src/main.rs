@@ -5,7 +5,7 @@ extern crate flate2;
 use std::collections::HashMap;
 use std::{fs, vec};
 use std::net::{ TcpListener, TcpStream };
-use std::io::{Error, ErrorKind};
+use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
 use std::sync::Arc;
 use http_request_parser::{ Request, Response };
@@ -45,9 +45,11 @@ fn handle_connection(stream: TcpStream, flags: Flags) -> Result<(), Error> {
   let path_text = req.path.to_lowercase();
   let path = parse_path(&path_text);
 
-  let res = match req.method.as_str() {
-    "GET" => handle_get(&stream, flags, path, req)?,
-    "POST" => handle_post(&stream, flags, path, req)?,
+  let headers = parse_headers(&req.headers);
+
+  let mut res = match req.method.as_str() {
+    "GET" => handle_get(&stream, flags, req, path, &headers)?,
+    "POST" => handle_post(&stream, flags, req, path, &headers)?,
     _ => {
       // Don't use Response::new() here, why would you want to
       // create a 200 OK response and then modify it?
@@ -60,12 +62,27 @@ fn handle_connection(stream: TcpStream, flags: Flags) -> Result<(), Error> {
       }
     }
   };
-  // TODO: add gzip support
+  if let Some(encoding) = headers.get("Accept-Encoding") {
+    if encoding == "gzip" {
+      res.headers.push("Content-Encoding: gzip".to_owned());
+      let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+      encoder.write_all(res.body.as_bytes()).unwrap();
+      let encoded = encoder.finish().unwrap();
+      res.headers.push(format!("Content-Length: {}", encoded.len()));
+      res.body = String::from_utf8(encoded).expect("GZip produced invalid UTF-8");
+    }
+  }
   res.send(&stream);
   Ok(())
 }
 
-fn handle_get(stream: &TcpStream, flags: Flags, path: Vec<&str>, req: Request) -> Result<Response, Error> {
+fn handle_get(
+  stream: &TcpStream,
+  flags: Flags, req: Request,
+  path: Vec<&str>,
+  headers: &HashMap<String, String>
+) -> Result<Response, Error>
+{
   let mut res = Response::new();
 
   if path.is_empty() {
@@ -80,7 +97,6 @@ fn handle_get(stream: &TcpStream, flags: Flags, path: Vec<&str>, req: Request) -
       res.body = path[1].to_owned();
     }
     "user-agent" => {
-      let headers = parse_headers(req.headers);
       let user_agent = match headers.get("User-Agent") {
         Some(ua) => ua.to_owned(),
         None => {
@@ -127,7 +143,14 @@ fn handle_get(stream: &TcpStream, flags: Flags, path: Vec<&str>, req: Request) -
   Ok(res)
 }
 
-fn handle_post(stream: &TcpStream, flags: Flags, path: Vec<&str>, req: Request) -> Result<Response, Error> {
+fn handle_post(
+  stream: &TcpStream,
+  flags: Flags,
+  req: Request,
+  path: Vec<&str>,
+  _headers: &HashMap<String, String>
+) -> Result<Response, Error>
+{
   let mut res = Response::new();
 
   match path[0] {
@@ -154,7 +177,7 @@ fn parse_path(path: &str) -> Vec<&str> {
   path.split('/').filter(|s| !s.is_empty()).collect()
 }
 
-fn parse_headers(headers: Vec<String>) -> HashMap<String, String> {
+fn parse_headers(headers: &Vec<String>) -> HashMap<String, String> {
   let mut map = HashMap::new();
   for header in headers {
     let mut pair = header.split(':');
