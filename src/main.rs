@@ -197,19 +197,17 @@ impl EncodedResponse {
     }
   }
   // Isn't this supposed to be an inmutable reference? I'm writing into it anyways
-  pub fn send(&self, mut stream: &TcpStream) {
-    let mut response = format!("HTTP/1.1 {} {}\r\n", self.status, self.status_message);
-    for header in self.headers.clone() {
-      response.push_str(format!("{}\r\n", header).as_str())
+  pub fn send(&mut self, mut stream: &TcpStream) {
+    let mut res = format!("HTTP/1.1 {} {}\r\n", self.status, self.status_message);
+    for header in self.headers.iter() {
+      res.push_str(format!("{}\r\n", header).as_str())
     }
-    let mut bin_response = Vec::with_capacity(response.len() + self.body.len() + 4);
-    bin_response.append(&mut response.as_bytes().to_vec());
-    bin_response.push(b'\r');
-    bin_response.push(b'\n');
-    bin_response.append(&mut self.body.clone());
-    bin_response.push(b'\r');
-    bin_response.push(b'\n');
-    stream.write_all(&bin_response).unwrap();
+    let mut bytes = Vec::with_capacity(res.len() + self.body.len() + 4);
+    bytes.append(&mut res.as_bytes().to_vec());
+    bytes.push(b'\r');
+    bytes.push(b'\n');
+    bytes.append(&mut self.body);
+    stream.write_all(&bytes).unwrap();
   }
 }
 
