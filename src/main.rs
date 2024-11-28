@@ -72,7 +72,18 @@ fn handle_connection(stream: TcpStream, flags: Flags) -> Result<(), Error> {
 
       let mut encoded_res = EncodedResponse::from(res);
       encoded_res.body = encoded;
-      encoded_res.headers.push("Content-Encoding: gzip".to_owned());
+
+      // Ugly implementation of a replace function
+      let mut headers = Vec::with_capacity(encoded_res.headers.len());
+      for header in encoded_res.headers.iter() {
+        if header.starts_with("Content-Encoding") {
+          headers.push("Content-Encoding: gzip".to_owned());
+          continue;
+        }
+        headers.push(header.to_owned());
+      }
+      encoded_res.headers = headers;
+
       encoded_res.headers.push(format!("Content-Length: {}", encoded_res.body.len()));
       encoded_res.send(&stream);
       return Ok(());
@@ -109,7 +120,6 @@ fn handle_get(
         None => {
           res.status = 400;
           res.status_message = "Bad Request".to_owned();
-          res.body = "Missing User-Agent header".to_owned();
           res.send(stream);
           return Err(Error::from(ErrorKind::InvalidInput));
         }
