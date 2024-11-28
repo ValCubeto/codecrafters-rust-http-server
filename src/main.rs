@@ -70,16 +70,7 @@ fn handle_connection(stream: TcpStream, flags: Flags) -> Result<(), Error> {
       encoder.write_all(res.body.as_bytes()).unwrap();
       let encoded = encoder.finish().unwrap();
 
-      // Ugly implementation of a replace function
-      let mut headers = Vec::with_capacity(res.headers.len());
-      for header in res.headers.iter() {
-        if header.starts_with("Content-Length") {
-          continue;
-        }
-        headers.push(header.to_owned());
-      }
-      headers.push(format!("Content-Length: {}", encoded.len()));
-      res.headers = headers;
+      res.headers.push(format!("Content-Length: {}", encoded.len()));
       let mut encoded_res = EncodedResponse::from(res);
       encoded_res.body = encoded;
 
@@ -88,6 +79,7 @@ fn handle_connection(stream: TcpStream, flags: Flags) -> Result<(), Error> {
       return Ok(());
     }
   }
+  res.headers.push(format!("Content-Length: {}", res.body.len()));
   res.send(&stream);
   Ok(())
 }
@@ -110,7 +102,6 @@ fn handle_get(
 
   match path[0] {
     "echo" => {
-      res.headers.push(format!("Content-Length: {}", path[1].len()));
       res.body = path[1].to_owned();
     }
     "user-agent" => {
@@ -123,7 +114,6 @@ fn handle_get(
           return Err(Error::from(ErrorKind::InvalidInput));
         }
       };
-      res.headers.push(format!("Content-Length: {}", user_agent.len()));
       res.body = user_agent;
     }
     "files" => {
@@ -146,8 +136,7 @@ fn handle_get(
       let contents = fs::read_to_string(&file_path)
         .unwrap_or_else(|why| panic!("Couldn't read file at {file_path:?}: {why}"));
       res.headers = vec![
-        "Content-Type: application/octet-stream".to_owned(),
-        format!("Content-Length: {}", contents.len()),
+        "Content-Type: application/octet-stream".to_owned()
       ];
       res.body = contents;
     }
