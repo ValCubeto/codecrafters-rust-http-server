@@ -7,6 +7,7 @@ rust-version = "1.80"
 
 [dependencies]
 anyhow = "1.0.68"                                # error handling
+argmap = "1.1.2"
 bytes = "1.3.0"                                  # helps manage buffers
 http_request_parser = "0.2.0"
 thiserror = "1.0.38"                             # error handling

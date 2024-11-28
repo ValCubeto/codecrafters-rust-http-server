@@ -1,3 +1,4 @@
+extern crate argmap;
 extern crate http_request_parser;
 
 use std::collections::HashMap;
@@ -6,6 +7,9 @@ use std::io::Error;
 use http_request_parser::{ Request, Response };
 
 fn main() -> Result<(), Error> {
+  let (args, flags) = argmap::parse(std::env::args());
+  println!("Args: {:?}", args);
+  println!("Flags: {:?}", flags);
   let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
 
   for stream in listener.incoming() {
