@@ -2,8 +2,11 @@ extern crate argmap;
 extern crate http_request_parser;
 
 use std::collections::HashMap;
+use std::fs;
 use std::net::{ TcpListener, TcpStream };
 use std::io::Error;
+use std::path::Path;
+use std::sync::Arc;
 use http_request_parser::{ Request, Response };
 
 fn main() -> Result<(), Error> {
@@ -12,12 +15,14 @@ fn main() -> Result<(), Error> {
   println!("Flags: {:?}", flags);
   let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
 
+  let flags_ref = Arc::new(flags);
   for stream in listener.incoming() {
     match stream {
       Err(why) => println!("Error: {why}"),
       Ok(stream) => {
         println!("Accepted new connection...");
-        std::thread::spawn(|| handle_connection(stream));
+        let flags = flags_ref.clone();
+        std::thread::spawn(|| handle_connection(stream, flags));
       }
     }
   }
@@ -25,7 +30,8 @@ fn main() -> Result<(), Error> {
   Ok(())
 }
 
-fn handle_connection(stream: TcpStream) -> Result<(), Error> {
+type Flags = Arc<HashMap<String, Vec<String>>>;
+fn handle_connection(stream: TcpStream, flags: Flags) -> Result<(), Error> {
   let req = Request::from(&stream);
   if req.version == 0.0 {
     println!("Connection ended");
@@ -63,6 +69,31 @@ fn handle_connection(stream: TcpStream) -> Result<(), Error> {
       };
       res.headers.push(format!("Content-Length: {}", user_agent.len()));
       res.body = user_agent;
+    }
+    "files" => {
+      // The argmap crate returns a Vec<String> for each flag,
+      // we are only interested in the last one
+      let dir = flags
+        .get("directory").expect("No directory specified")
+        .last().expect("No directory specified");
+      let file_name = path[1];
+      let file_path = Path::new(dir).join(file_name);
+
+      if !file_path.exists() {
+        res.status = 404;
+        res.status_message = "Not Found".to_owned();
+        res.send(&stream);
+        return Ok(());
+      }
+
+      // TODO: send Internal Server Error
+      let contents = fs::read_to_string(&file_path)
+        .unwrap_or_else(|why| panic!("Couldn't read file at {file_path:?}: {why}"));
+      res.headers = vec![
+        "Content-Type: application/octet-stream".to_owned(),
+        format!("Content-Length: {}", contents.len()),
+      ];
+      res.body = contents;
     }
     _ => {
       res.status = 404;
