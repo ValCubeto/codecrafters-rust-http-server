@@ -11,9 +11,9 @@ fn main() -> Result<(), Error> {
   for stream in listener.incoming() {
     match stream {
       Err(why) => println!("Error: {why}"),
-      Ok(mut stream) => {
+      Ok(stream) => {
         println!("Accepted new connection...");
-        handle_connection(&mut stream)?;
+        std::thread::spawn(|| handle_connection(stream));
       }
     }
   }
@@ -21,8 +21,8 @@ fn main() -> Result<(), Error> {
   Ok(())
 }
 
-fn handle_connection(stream: &mut TcpStream) -> Result<(), Error> {
-  let req = Request::from(stream);
+fn handle_connection(stream: TcpStream) -> Result<(), Error> {
+  let req = Request::from(&stream);
   if req.version == 0.0 {
     println!("Connection ended");
     return Ok(());
@@ -36,7 +36,7 @@ fn handle_connection(stream: &mut TcpStream) -> Result<(), Error> {
   if path.is_empty() {
     // GET "/", send a 200 OK response
     // In this case the 200 OK is the default Response, so no need to change anything
-    res.send(stream);
+    res.send(&stream);
     return Ok(());
   }
 
@@ -53,7 +53,7 @@ fn handle_connection(stream: &mut TcpStream) -> Result<(), Error> {
           res.status = 400;
           res.status_message = "Bad Request".to_owned();
           res.body = "Missing User-Agent header".to_owned();
-          res.send(stream);
+          res.send(&stream);
           return Ok(());
         }
       };
@@ -65,7 +65,7 @@ fn handle_connection(stream: &mut TcpStream) -> Result<(), Error> {
       res.status_message = "Not Found".to_owned();
     }
   }
-  res.send(stream);
+  res.send(&stream);
   Ok(())
 }
 
