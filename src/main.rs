@@ -10,8 +10,7 @@ use std::sync::Arc;
 use http_request_parser::{ Request, Response };
 
 fn main() -> Result<(), Error> {
-  let (args, flags) = argmap::parse(std::env::args());
-  println!("Args: {:?}", args);
+  let (_args, flags) = argmap::parse(std::env::args());
   println!("Flags: {:?}", flags);
   let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
 
@@ -31,6 +30,7 @@ fn main() -> Result<(), Error> {
 }
 
 type Flags = Arc<HashMap<String, Vec<String>>>;
+
 fn handle_connection(stream: TcpStream, flags: Flags) -> Result<(), Error> {
   let req = Request::from(&stream);
   if req.version == 0.0 {
@@ -43,6 +43,21 @@ fn handle_connection(stream: TcpStream, flags: Flags) -> Result<(), Error> {
 
   let path_text = req.path.to_lowercase();
   let path = parse_path(&path_text);
+
+  match req.method.as_str() {
+    "GET" => handle_get(stream, flags, path, req),
+    "POST" => handle_post(stream, flags, path, req),
+    _ => {
+      res.status = 400;
+      res.status_message = "Bad Request".to_owned();
+      Ok(())
+    }
+  }
+}
+
+fn handle_get(stream: TcpStream, flags: Flags, path: Vec<&str>, req: Request) -> Result<(), Error> {
+  let mut res = Response::new();
+
   if path.is_empty() {
     // GET "/", send a 200 OK response
     // In this case the 200 OK is the default Response, so no need to change anything
@@ -94,6 +109,29 @@ fn handle_connection(stream: TcpStream, flags: Flags) -> Result<(), Error> {
         format!("Content-Length: {}", contents.len()),
       ];
       res.body = contents;
+    }
+    _ => {
+      res.status = 404;
+      res.status_message = "Not Found".to_owned();
+    }
+  }
+  res.send(&stream);
+  Ok(())
+}
+
+fn handle_post(stream: TcpStream, flags: Flags, path: Vec<&str>, req: Request) -> Result<(), Error> {
+  let mut res = Response::new();
+
+  match path[0] {
+    "files" => {
+      let dir = flags
+        .get("directory").expect("No directory specified")
+        .last().expect("No directory specified");
+      let file_name = path[1];
+      let file_path = Path::new(dir).join(file_name);
+      fs::write(file_path, req.body)?;
+      res.status = 201;
+      res.status_message = "Created".to_owned();
     }
     _ => {
       res.status = 404;
