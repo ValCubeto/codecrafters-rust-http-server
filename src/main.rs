@@ -39,7 +39,7 @@ fn handle_connection(stream: TcpStream, flags: Flags) -> Result<(), Error> {
   }
   let mut res = Response::new();
 
-  println!("Received request: {:?}", req.path);
+  println!("Received request: {} {}", req.method, req.path);
 
   let path_text = req.path.to_lowercase();
   let path = parse_path(&path_text);
