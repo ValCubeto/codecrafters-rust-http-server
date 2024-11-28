@@ -64,23 +64,21 @@ fn handle_connection(stream: TcpStream, flags: Flags) -> Result<(), Error> {
   };
   if let Some(encodings) = headers.get("Accept-Encoding") {
     let encodings: Vec<&str> = encodings.split(',').map(|s| s.trim()).collect();
-    dbg!(&encodings);
     // Ignore other encodings for now
     if encodings.contains(&"gzip") {
       let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
       encoder.write_all(res.body.as_bytes()).unwrap();
       let encoded = encoder.finish().unwrap();
-      
-      
+
       // Ugly implementation of a replace function
       let mut headers = Vec::with_capacity(res.headers.len());
       for header in res.headers.iter() {
-        if header.starts_with("Content-Encoding") {
-          headers.push("Content-Encoding: gzip".to_owned());
+        if header.starts_with("Content-Length") {
           continue;
         }
         headers.push(header.to_owned());
       }
+      headers.push(format!("Content-Length: {}", encoded.len()));
       res.headers = headers;
       let mut encoded_res = EncodedResponse::from(res);
       encoded_res.body = encoded;
