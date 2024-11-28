@@ -200,8 +200,10 @@ impl EncodedResponse {
     for header in self.headers.clone() {
       response.push_str(format!("{}\r\n", header).as_str())
     }
-    let mut bin_response = Vec::with_capacity(response.len() + self.body.len() + 2);
+    let mut bin_response = Vec::with_capacity(response.len() + self.body.len() + 4);
     bin_response.append(&mut response.as_bytes().to_vec());
+    bin_response.push(b'\r');
+    bin_response.push(b'\n');
     bin_response.append(&mut self.body.clone());
     bin_response.push(b'\r');
     bin_response.push(b'\n');
