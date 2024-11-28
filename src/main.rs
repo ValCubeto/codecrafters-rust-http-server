@@ -47,7 +47,7 @@ fn handle_connection(stream: TcpStream, flags: Flags) -> Result<(), Error> {
 
   let headers = parse_headers(&req.headers);
 
-  let res = match req.method.as_str() {
+  let mut res = match req.method.as_str() {
     "GET" => handle_get(&stream, flags, req, path, &headers)?,
     "POST" => handle_post(&stream, flags, req, path, &headers)?,
     _ => {
@@ -69,20 +69,20 @@ fn handle_connection(stream: TcpStream, flags: Flags) -> Result<(), Error> {
       let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
       encoder.write_all(res.body.as_bytes()).unwrap();
       let encoded = encoder.finish().unwrap();
-
-      let mut encoded_res = EncodedResponse::from(res);
-      encoded_res.body = encoded;
-
+      
+      
       // Ugly implementation of a replace function
-      let mut headers = Vec::with_capacity(encoded_res.headers.len());
-      for header in encoded_res.headers.iter() {
+      let mut headers = Vec::with_capacity(res.headers.len());
+      for header in res.headers.iter() {
         if header.starts_with("Content-Encoding") {
           headers.push("Content-Encoding: gzip".to_owned());
           continue;
         }
         headers.push(header.to_owned());
       }
-      encoded_res.headers = headers;
+      res.headers = headers;
+      let mut encoded_res = EncodedResponse::from(res);
+      encoded_res.body = encoded;
 
       encoded_res.headers.push(format!("Content-Length: {}", encoded_res.body.len()));
       encoded_res.send(&stream);
