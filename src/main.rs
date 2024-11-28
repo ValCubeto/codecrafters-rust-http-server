@@ -47,7 +47,7 @@ fn handle_connection(stream: TcpStream, flags: Flags) -> Result<(), Error> {
 
   let headers = parse_headers(&req.headers);
 
-  let mut res = match req.method.as_str() {
+  let res = match req.method.as_str() {
     "GET" => handle_get(&stream, flags, req, path, &headers)?,
     "POST" => handle_post(&stream, flags, req, path, &headers)?,
     _ => {
@@ -64,12 +64,16 @@ fn handle_connection(stream: TcpStream, flags: Flags) -> Result<(), Error> {
   };
   if let Some(encoding) = headers.get("Accept-Encoding") {
     if encoding == "gzip" {
-      res.headers.push("Content-Encoding: gzip".to_owned());
       let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
       encoder.write_all(res.body.as_bytes()).unwrap();
       let encoded = encoder.finish().unwrap();
-      res.headers.push(format!("Content-Length: {}", encoded.len()));
-      res.body = String::from_utf8(encoded).expect("GZip produced invalid UTF-8");
+
+      let mut encoded_res = EncodedResponse::from(res);
+      encoded_res.body = encoded;
+      encoded_res.headers.push("Content-Encoding: gzip".to_owned());
+      encoded_res.headers.push(format!("Content-Length: {}", encoded_res.body.len()));
+      encoded_res.send(&stream);
+      return Ok(());
     }
   }
   res.send(&stream);
@@ -78,7 +82,8 @@ fn handle_connection(stream: TcpStream, flags: Flags) -> Result<(), Error> {
 
 fn handle_get(
   stream: &TcpStream,
-  flags: Flags, req: Request,
+  flags: Flags,
+  _req: Request,
   path: Vec<&str>,
   headers: &HashMap<String, String>
 ) -> Result<Response, Error>
@@ -171,6 +176,37 @@ fn handle_post(
     }
   }
   Ok(res)
+}
+
+struct EncodedResponse {
+  pub status: i32,
+  pub status_message: String,
+  pub headers: Vec<String>,
+  pub body: Vec<u8>,
+}
+
+impl EncodedResponse {
+  pub fn from(res: Response) -> EncodedResponse {
+    EncodedResponse {
+      status: res.status,
+      status_message: res.status_message,
+      headers: res.headers,
+      body: Vec::new(),
+    }
+  }
+  // Isn't this supposed to be an inmutable reference? I'm writing into it anyways
+  pub fn send(&self, mut stream: &TcpStream) {
+    let mut response = format!("HTTP/1.1 {} {}\r\n", self.status, self.status_message);
+    for header in self.headers.clone() {
+      response.push_str(format!("{}\r\n", header).as_str())
+    }
+    let mut bin_response = Vec::with_capacity(response.len() + self.body.len() + 2);
+    bin_response.append(&mut response.as_bytes().to_vec());
+    bin_response.append(&mut self.body.clone());
+    bin_response.push(b'\r');
+    bin_response.push(b'\n');
+    stream.write_all(&bin_response).unwrap();
+  }
 }
 
 fn parse_path(path: &str) -> Vec<&str> {
