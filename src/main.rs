@@ -1,13 +1,15 @@
 extern crate argmap;
 extern crate http_request_parser;
+extern crate flate2;
 
 use std::collections::HashMap;
-use std::fs;
+use std::{fs, vec};
 use std::net::{ TcpListener, TcpStream };
-use std::io::Error;
+use std::io::{Error, ErrorKind};
 use std::path::Path;
 use std::sync::Arc;
 use http_request_parser::{ Request, Response };
+use flate2::{ Compression, write::GzEncoder };
 
 fn main() -> Result<(), Error> {
   let (_args, flags) = argmap::parse(std::env::args());
@@ -37,32 +39,39 @@ fn handle_connection(stream: TcpStream, flags: Flags) -> Result<(), Error> {
     println!("Connection ended");
     return Ok(());
   }
-  let mut res = Response::new();
 
   println!("Received request: {} {}", req.method, req.path);
 
   let path_text = req.path.to_lowercase();
   let path = parse_path(&path_text);
 
-  match req.method.as_str() {
-    "GET" => handle_get(stream, flags, path, req),
-    "POST" => handle_post(stream, flags, path, req),
+  let res = match req.method.as_str() {
+    "GET" => handle_get(&stream, flags, path, req)?,
+    "POST" => handle_post(&stream, flags, path, req)?,
     _ => {
-      res.status = 400;
-      res.status_message = "Bad Request".to_owned();
-      Ok(())
+      // Don't use Response::new() here, why would you want to
+      // create a 200 OK response and then modify it?
+      Response {
+        version: 1.1,
+        status: 400,
+        status_message: "Bad Request".to_owned(),
+        headers: vec!["Content-Type: text/plain".to_owned()],
+        body: "".to_owned(),
+      }
     }
-  }
+  };
+  // TODO: add gzip support
+  res.send(&stream);
+  Ok(())
 }
 
-fn handle_get(stream: TcpStream, flags: Flags, path: Vec<&str>, req: Request) -> Result<(), Error> {
+fn handle_get(stream: &TcpStream, flags: Flags, path: Vec<&str>, req: Request) -> Result<Response, Error> {
   let mut res = Response::new();
 
   if path.is_empty() {
     // GET "/", send a 200 OK response
     // In this case the 200 OK is the default Response, so no need to change anything
-    res.send(&stream);
-    return Ok(());
+    return Ok(res);
   }
 
   match path[0] {
@@ -78,8 +87,8 @@ fn handle_get(stream: TcpStream, flags: Flags, path: Vec<&str>, req: Request) ->
           res.status = 400;
           res.status_message = "Bad Request".to_owned();
           res.body = "Missing User-Agent header".to_owned();
-          res.send(&stream);
-          return Ok(());
+          res.send(stream);
+          return Err(Error::from(ErrorKind::InvalidInput));
         }
       };
       res.headers.push(format!("Content-Length: {}", user_agent.len()));
@@ -97,8 +106,8 @@ fn handle_get(stream: TcpStream, flags: Flags, path: Vec<&str>, req: Request) ->
       if !file_path.exists() {
         res.status = 404;
         res.status_message = "Not Found".to_owned();
-        res.send(&stream);
-        return Ok(());
+        res.send(stream);
+        return Err(Error::from(ErrorKind::NotFound));
       }
 
       // TODO: send Internal Server Error
@@ -115,11 +124,10 @@ fn handle_get(stream: TcpStream, flags: Flags, path: Vec<&str>, req: Request) ->
       res.status_message = "Not Found".to_owned();
     }
   }
-  res.send(&stream);
-  Ok(())
+  Ok(res)
 }
 
-fn handle_post(stream: TcpStream, flags: Flags, path: Vec<&str>, req: Request) -> Result<(), Error> {
+fn handle_post(stream: &TcpStream, flags: Flags, path: Vec<&str>, req: Request) -> Result<Response, Error> {
   let mut res = Response::new();
 
   match path[0] {
@@ -136,10 +144,10 @@ fn handle_post(stream: TcpStream, flags: Flags, path: Vec<&str>, req: Request) -
     _ => {
       res.status = 404;
       res.status_message = "Not Found".to_owned();
+      res.send(stream);
     }
   }
-  res.send(&stream);
-  Ok(())
+  Ok(res)
 }
 
 fn parse_path(path: &str) -> Vec<&str> {
