@@ -64,6 +64,7 @@ fn handle_connection(stream: TcpStream, flags: Flags) -> Result<(), Error> {
   };
   if let Some(encodings) = headers.get("Accept-Encoding") {
     let encodings: Vec<&str> = encodings.split(',').map(|s| s.trim()).collect();
+    dbg!(&encodings);
     // Ignore other encodings for now
     if encodings.contains(&"gzip") {
       let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
