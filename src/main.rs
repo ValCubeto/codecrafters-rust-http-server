@@ -30,13 +30,22 @@ fn handle_connection(stream: &mut TcpStream) -> Result<(), Error> {
 
   println!("Received request: {:?}", req.path);
 
-  if req.path == "/" {
-    res.status = 200;
-    res.status_message = "OK".to_owned();
-  } else {
-    res.status = 404;
-    res.status_message = "Not Found".to_owned();
-    println!("{res:?}");
+  
+  let path: Vec<&str> = req.path.split('/').filter(|s| !s.is_empty()).collect();
+  if path.is_empty() {
+    res.send(stream);
+    return Ok(());
+  }
+
+  match path[0] {
+    "echo" => {
+      res.headers.push(format!("Content-Length: {}", path[1].len()));
+      res.body = path[1].to_owned();
+    }
+    _ => {
+      res.status = 404;
+      res.status_message = "Not Found".to_owned();
+    }
   }
   res.send(stream);
   Ok(())
