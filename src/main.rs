@@ -83,7 +83,7 @@ fn handle_connection(stream: TcpStream, flags: Flags) -> Result<(), Error> {
       let mut encoded_res = EncodedResponse::from(res);
       encoded_res.body = encoded;
 
-      encoded_res.headers.push(format!("Content-Length: {}", encoded_res.body.len()));
+      encoded_res.headers.push("Content-Encoding: gzip".to_owned());
       encoded_res.send(&stream);
       return Ok(());
     }
