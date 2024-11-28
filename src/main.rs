@@ -23,6 +23,7 @@ fn main() -> Result<(), Error> {
 fn handle_connection(stream: &mut TcpStream) -> Result<(), Error> {
   let req = Request::from(stream);
   if req.version == 0.0 {
+    println!("Connection ended");
     return Ok(());
   }
   let mut res = Response::new();
