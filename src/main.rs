@@ -19,6 +19,14 @@ fn main() -> Result<(), Error> {
   println!("Flags: {:?}", flags);
   let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
 
+  /* let flags: HashMap<String, String> = flags.iter()
+    .map(|(&key, &values)| {
+      (key, *values.last().unwrap_or_else(|| {
+        panic!("No value specified for flag --{k:?}");
+      }))
+    })
+    .collect(); */
+
   let flags_ref = Arc::new(flags);
   for stream in listener.incoming() {
     match stream {
